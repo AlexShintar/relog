@@ -18,9 +18,6 @@ import org.springframework.web.util.ContentCachingRequestWrapper;
 import org.springframework.web.util.ContentCachingResponseWrapper;
 import ru.shintar.rest_logger.config.LoggerProperties;
 
-
-import java.util.Optional;
-
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.*;
 
@@ -40,16 +37,12 @@ public class LoggerHandlerTest {
     void setUp() {
         this.request = new MockHttpServletRequest("GET", "/test");
         this.request.addHeader("Test", "test");
-        this.request.addParameter("test", "test");
-        this.request.setContent("test".getBytes());
         this.response = new MockHttpServletResponse();
         this.response.setStatus(200);
         this.response.setHeader("Test", "test");
-        this.response.addHeader("Test", "test");
         this.chain = new MockFilterChain();
         this.mockedLoggerFactory = mockStatic(LoggerFactory.class);
-        this.mockedLoggerFactory.when(() -> LoggerFactory.getLogger(LoggerHandler.class))
-                .thenReturn(logger);
+        this.mockedLoggerFactory.when(() -> LoggerFactory.getLogger(LoggerHandler.class)).thenReturn(logger);
         this.loggerHandler = new LoggerHandler(new LoggerProperties());
     }
 
@@ -62,15 +55,21 @@ public class LoggerHandlerTest {
     void loggerHandlerLoggingRequest() {
         ContentCachingRequestWrapper req = spy(new ContentCachingRequestWrapper(this.request));
         ContentCachingResponseWrapper resp = new ContentCachingResponseWrapper(this.response);
-        byte[] contentAsByteArray = Optional.ofNullable(this.request.getContentAsByteArray()).orElse(new byte[0]);
-        ArgumentCaptor<String> captorReqMap = ArgumentCaptor.forClass(String.class);
-        doNothing().when(this.logger).info(anyString(), captorReqMap.capture(), anyString());
-        when(req.getContentAsByteArray()).thenReturn(contentAsByteArray);
+        ArgumentCaptor<String> captorMethod = ArgumentCaptor.forClass(String.class);
+        ArgumentCaptor<String> captorURI = ArgumentCaptor.forClass(String.class);
+        ArgumentCaptor<String> captorHeader = ArgumentCaptor.forClass(String.class);
+        ArgumentCaptor<Integer> captorStatus = ArgumentCaptor.forClass(Integer.class);
 
-       this.loggerHandler.logging(req, resp, 0);
+        doNothing().when(this.logger).info(anyString(), captorMethod.capture(),
+                captorURI.capture(), captorStatus.capture(), anyLong());
 
-        String requestLogMsg = captorReqMap.getValue();
-        assertThat(requestLogMsg).contains(request.getMethod());
-        assertThat(requestLogMsg).contains(request.getRequestURL());
+        doNothing().when(this.logger).info(anyString(), captorHeader.capture());
+
+        this.loggerHandler.logging(req, resp, 0);
+
+        assertThat(captorMethod.getValue()).contains(request.getMethod());
+        assertThat(request.getRequestURL()).contains(captorURI.getValue());
+        assertThat(captorHeader.getValue()).contains(request.getHeader("Test"));
+        assertThat(captorStatus.getValue()).isEqualTo(response.getStatus());
     }
 }
